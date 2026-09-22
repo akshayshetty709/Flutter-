@@ -10,3 +10,11 @@ source ~/.bashrc
 [9/22, 15:31] akshayshetty709: flutter doctor
 [9/22, 15:31] akshayshetty709: flutter pub get
 flutter build apk --release
+
+
+flutter config --android-sdk /home/kiaq-lap-130/Android/Sdk
+
+echo 'export ANDROID_HOME="$HOME/Android/Sdk"' >> ~/.bashrc
+echo 'export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools"' >> ~/.bashrc
+source ~/.bashrc
+
