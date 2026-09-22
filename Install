@@ -19,3 +19,4 @@ echo 'export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/pl
 source ~/.bashrc
 
 yes | ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1"
