@@ -1,0 +1,12 @@
+[9/22, 15:30] akshayshetty709: sudo apt update
+sudo apt install -y curl git unzip xz-utils zip libglu1-mesa clang cmake ninja-build pkg-config libgtk-3-dev
+[9/22, 15:30] akshayshetty709: cd ~
+git clone https://github.com/flutter/flutter.git -b stable
+[9/22, 15:31] akshayshetty709: echo 'export PATH="$PATH:$HOME/flutter/bin"' >> ~/.bashrc
+source ~/.bashrc
+[9/22, 15:31] akshayshetty709: flutter doctor
+[9/22, 15:31] akshayshetty709: sudo snap install android-studio --classic
+[9/22, 15:31] akshayshetty709: flutter doctor --android-licenses
+[9/22, 15:31] akshayshetty709: flutter doctor
+[9/22, 15:31] akshayshetty709: flutter pub get
+flutter build apk --release
