@@ -1,0 +1,28 @@
+pipeline {
+    agent any
+
+    // Define environment variables from Jenkins Credentials
+    environment {
+        FRONTEND_URL = credentials('FRONTEND_URL') // Secret Text credential ID in Jenkins
+    }
+ 
+    stages { 
+        stage('Deploy to EC2') {
+            steps {
+                sshagent(['hrms-ssh']) {
+                    sh '''
+                        ssh -A -o StrictHostKeyChecking=no ubuntu@IP \
+                            "set -e && \
+                            rm -rf HRMS-Backend || true && \
+                            git clone git@github.com url && \
+                            cd /home/ubuntu/HRMS-backend && \
+                            echo 'FRONTEND_URL=${FRONTEND_URL}' > .env && \
+                            docker compose down || true && \
+                            docker system prune -f && \
+                            docker compose up --build -d"
+                    '''
+                }
+            }
+        }
+    }
+}
