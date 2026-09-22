@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+
+    environment {
+        EC2_USER = 'ubuntu'                     // change if your EC2 user differs
+        EC2_HOST = 'YOUR_EC2_PUBLIC_IP_OR_DNS'   // e.g. ec2-xx-xx-xx-xx.compute.amazonaws.com
+        EC2_APP_DIR = '/home/ubuntu/Backend'     // path where repo is cloned on EC2
+        SSH_CRED_ID = 'ec2-ssh-key'              // Jenkins credential ID for the SSH key
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                // Pulls from the branch/repo configured in the Jenkins job itself
+                checkout scm
+            }
+        }
+
+        stage('Install & Test (optional)') {
+            steps {
+                sh '''
+                    node -v || true
+                    npm ci
+                    npm run lint || true
+                    npm run test || true
+                    npm run build
+                '''
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED_ID}"]) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} \
+                        'bash ${EC2_APP_DIR}/deploy.sh'
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment to EC2 completed successfully.'
+        }
+        failure {
+            echo 'Deployment failed. Check the console output above.'
+        }
+    }
+}
