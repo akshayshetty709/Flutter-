@@ -18,3 +18,4 @@ echo 'export ANDROID_HOME="$HOME/Android/Sdk"' >> ~/.bashrc
 echo 'export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools"' >> ~/.bashrc
 source ~/.bashrc
 
+yes | ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses
