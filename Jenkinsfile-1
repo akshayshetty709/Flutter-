@@ -2,51 +2,95 @@ pipeline {
     agent any
 
     environment {
-        EC2_USER = 'ubuntu'                     // change if your EC2 user differs
-        EC2_HOST = 'YOUR_EC2_PUBLIC_IP_OR_DNS'   // e.g. ec2-xx-xx-xx-xx.compute.amazonaws.com
-        EC2_APP_DIR = '/home/ubuntu/Backend'     // path where repo is cloned on EC2
-        SSH_CRED_ID = 'ec2-ssh-key'              // Jenkins credential ID for the SSH key
+        FLUTTER_ROOT   = "${HOME}/flutter"
+        ANDROID_HOME   = "${HOME}/Android/Sdk"
+        PATH           = "${FLUTTER_ROOT}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${env.PATH}"
+        // Keep Gradle's JVM memory bounded — important on low-RAM build agents.
+        GRADLE_OPTS    = "-Dorg.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=1G"
+    }
+
+    options {
+        timestamps()
+        // Avoid overlapping builds fighting over the same Gradle daemon / RAM.
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                // Pulls from the branch/repo configured in the Jenkins job itself
                 checkout scm
             }
         }
 
-        stage('Install & Test (optional)') {
+        stage('Verify Toolchain') {
             steps {
                 sh '''
-                    node -v || true
-                    npm ci
-                    npm run lint || true
-                    npm run test || true
-                    npm run build
+                    flutter --version
+                    flutter doctor -v
                 '''
             }
         }
 
-        stage('Deploy to EC2') {
+        stage('Clean') {
             steps {
-                sshagent(credentials: ["${SSH_CRED_ID}"]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} \
-                        'bash ${EC2_APP_DIR}/deploy.sh'
-                    """
-                }
+                sh 'flutter clean'
+            }
+        }
+
+        stage('Get Dependencies') {
+            steps {
+                sh 'flutter pub get'
+            }
+        }
+
+        stage('Code Generation') {
+            // Only relevant if the project uses build_runner (e.g. riverpod_annotation).
+            when {
+                expression { fileExists('pubspec.yaml') && sh(script: "grep -q 'build_runner' pubspec.yaml", returnStatus: true) == 0 }
+            }
+            steps {
+                sh 'dart run build_runner build --delete-conflicting-outputs'
+            }
+        }
+
+        stage('Analyze') {
+            steps {
+                sh 'flutter analyze || true'   // non-blocking; remove "|| true" to fail build on lint errors
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'flutter test || true'      // non-blocking; remove "|| true" to fail build on test failures
+            }
+        }
+
+        stage('Build APK') {
+            steps {
+                sh 'flutter build apk --release'
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: 'build/app/outputs/flutter-apk/app-release.apk',
+                                  fingerprint: true
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment to EC2 completed successfully.'
+            echo 'Build succeeded: app-release.apk'
         }
         failure {
-            echo 'Deployment failed. Check the console output above.'
+            echo 'Build failed. Check console output above for Gradle/Flutter errors.'
+        }
+        always {
+            // Free RAM/disk between builds on constrained agents.
+            sh 'flutter clean || true'
         }
     }
 }
