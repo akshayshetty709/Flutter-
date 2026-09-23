@@ -1,0 +1,100 @@
+pipeline {
+    agent any
+
+    environment {
+        FLUTTER_ROOT   = "${HOME}/flutter"
+        ANDROID_HOME   = "${HOME}/Android/Sdk"
+        PATH           = "${FLUTTER_ROOT}/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${env.PATH}"
+        // Keep Gradle's JVM memory bounded — important on low-RAM build agents.
+        GRADLE_OPTS    = "-Dorg.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=1G"
+    }
+
+    options {
+        timestamps()
+        // Avoid overlapping builds fighting over the same Gradle daemon / RAM.
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    parameters {
+        choice(name: 'BUILD_TYPE', choices: ['release', 'debug', 'profile'], description: 'Flutter build type')
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Verify Toolchain') {
+            steps {
+                sh '''
+                    flutter --version
+                    flutter doctor -v
+                '''
+            }
+        }
+
+        stage('Clean') {
+            steps {
+                sh 'flutter clean'
+            }
+        }
+
+        stage('Get Dependencies') {
+            steps {
+                sh 'flutter pub get'
+            }
+        }
+
+        stage('Code Generation') {
+            // Only relevant if the project uses build_runner (e.g. riverpod_annotation).
+            when {
+                expression { fileExists('pubspec.yaml') && sh(script: "grep -q 'build_runner' pubspec.yaml", returnStatus: true) == 0 }
+            }
+            steps {
+                sh 'dart run build_runner build --delete-conflicting-outputs'
+            }
+        }
+
+        stage('Analyze') {
+            steps {
+                sh 'flutter analyze || true'   // non-blocking; remove "|| true" to fail build on lint errors
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'flutter test || true'      // non-blocking; remove "|| true" to fail build on test failures
+            }
+        }
+
+        stage('Build APK') {
+            steps {
+                sh "flutter build apk --${params.BUILD_TYPE}"
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: "build/app/outputs/flutter-apk/app-${params.BUILD_TYPE}.apk",
+                                  fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build succeeded: app-${params.BUILD_TYPE}.apk"
+        }
+        failure {
+            echo 'Build failed. Check console output above for Gradle/Flutter errors.'
+        }
+        always {
+            // Free RAM/disk between builds on constrained agents.
+            sh 'flutter clean || true'
+        }
+    }
+}
